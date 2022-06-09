@@ -1,6 +1,7 @@
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     net::TcpListener,
+    sync::broadcast,
 };
 
 #[tokio::main]
@@ -8,19 +9,37 @@ use tokio::{
 async fn main() {
     let listener: TcpListener = TcpListener::bind("localhost:8080").await.unwrap();
 
-    let (mut socket, _addr) = listener.accept().await.unwrap();
-
-    let (reader, mut writer) = socket.split();
-
-    let mut reader = BufReader::new(reader);
-    let mut line = String::new();
+    let (tx, _rx) = broadcast::channel(10);
     loop {
-        let bytes_read: usize = reader.read_line(&mut line).await.unwrap();
-        if bytes_read == 0 {
-            break;
-        }
+        let (mut socket, addr) = listener.accept().await.unwrap();
+        let tx = tx.clone();
+        let mut rx = tx.subscribe();
 
-        writer.write_all(line.as_bytes()).await.unwrap();
-        line.clear();
+        //Allows for concurrent tasks
+        tokio::spawn(async move {
+            let (reader, mut writer) = socket.split(); //: (ReadHalf, WriteHalf)
+
+            let mut reader = BufReader::new(reader);
+            let mut line = String::new();
+            loop {
+                // Similar to Promise.race in Node.js
+                tokio::select! {
+                    result = reader.read_line(&mut line) => {
+                        if result.unwrap() == 0 {
+                            break;
+                        }
+                        tx.send((line.clone(), addr)).unwrap();
+                        line.clear();
+                    }
+                    result = rx.recv() => {
+                        let (msg, other_addr) = result.unwrap();
+
+                        if addr != other_addr {
+                            writer.write_all(msg.as_bytes()).await.unwrap();
+                        }
+                    }
+                }
+            }
+        });
     }
 }
