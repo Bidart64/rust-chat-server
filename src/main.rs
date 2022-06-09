@@ -1,6 +1,9 @@
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
-    net::TcpListener,
+    net::{
+        tcp::{ReadHalf, WriteHalf},
+        TcpListener,
+    },
     sync::broadcast,
 };
 
@@ -17,10 +20,10 @@ async fn main() {
 
         //Allows for concurrent tasks
         tokio::spawn(async move {
-            let (reader, mut writer) = socket.split(); //: (ReadHalf, WriteHalf)
+            let (reader, mut writer): (ReadHalf, WriteHalf) = socket.split(); //: (ReadHalf, WriteHalf)
 
             let mut reader = BufReader::new(reader);
-            let mut line = String::new();
+            let mut line: String = String::new();
             loop {
                 // Similar to Promise.race in Node.js
                 tokio::select! {
