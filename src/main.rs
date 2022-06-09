@@ -33,9 +33,9 @@ async fn main() {
                     }
                     result = rx.recv() => {
                         let (msg, other_addr) = result.unwrap();
-
                         if addr != other_addr {
-                            writer.write_all(msg.as_bytes()).await.unwrap();
+                            let final_msg = "(".to_string() + &other_addr.to_string() + ") " + &String::from(msg) ;
+                            writer.write_all(final_msg.as_bytes()).await.unwrap();
                         }
                     }
                 }
